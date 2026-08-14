@@ -1,0 +1,14 @@
+(env
+ (dev
+  (flags
+   (:standard -warn-error -A -w -34)))
+ (release
+  (ocamlopt_flags (:standard -O3))
+  (flags
+   (:standard -warn-error -A -w -34))))
+
+(executables
+ (names main)
+ (modes byte exe)
+ (modules main)
+ (libraries unix str))
