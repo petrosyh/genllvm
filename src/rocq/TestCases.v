@@ -2,14 +2,13 @@
     and some lemmas related to them.
  *)
 From QuickChick Require Import QuickChick.
-From Vellvm Require Import ShowAST ReprAST TopLevel LLVMAst DynamicValues.
-From GenLLVM Require Import GenAST QCVellvm.
+From Vellvm Require Import ShowAST ReprAST GenAST QCVellvm TopLevel LLVMAst DynamicValues.
 Require Import Semantics.LLVMEvents.
 Require Import Semantics.InterpretationStack.
 Require Import Handlers.Handlers.
 
-Require Import String.
-Require Import ZArith.
+From Stdlib Require Import String.
+From Stdlib Require Import ZArith.
 
 From ITree Require Import
      ITree
@@ -19,7 +18,7 @@ From ITree Require Import
 Require Import ExtrOcamlBasic.
 Require Import ExtrOcamlString.
 
-Require Import List.
+From Stdlib Require Import List.
 Import ListNotations.
 
 
@@ -189,6 +188,7 @@ From Vellvm Require Import
      Syntax.CFG
      Syntax.Traversal
      Syntax.Scope
+     Syntax.ScopeTheory
      Syntax.TypToDtyp
      Semantics.InterpretationStack
      Semantics.TopLevel
