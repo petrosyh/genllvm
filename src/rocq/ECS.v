@@ -5,12 +5,11 @@ From Ltac2 Require Import Ltac2.
 From Stdlib Require Import ZArith String.
 From Vellvm.Utils Require Import
   IntMaps
-  Monads
-  Default.
+  ListUtil.
 
-From Vellvm.QC Require Import Lens.
+From GenLLVM Require Import Lens Default.
 Import LensNotations.
-Local Open Scope lens.
+#[local] Open Scope lens.
 
 Require Import ExtLib.Data.Monads.StateMonad.
 Require Import ExtLib.Data.Monads.OptionMonad.

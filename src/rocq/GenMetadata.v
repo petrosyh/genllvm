@@ -2,15 +2,15 @@ From Ltac2 Require Import Ltac2.
 From Stdlib Require Import List String.
 From Vellvm.Utils Require Import
   IntMaps
-  Monads
-  Default.
+  ListUtil.
 
 From Vellvm.Syntax Require Import
   LLVMAst.
 
-From Vellvm.QC Require Import ECS Lens.
+From GenLLVM Require Import Default ECS Lens.
 Import LensNotations.
-Local Open Scope lens.
+#[local] Open Scope monad_scope.
+#[local] Open Scope lens.
 
 Require Import ExtLib.Data.Monads.StateMonad.
 Require Import ExtLib.Data.Monads.OptionMonad.
@@ -1078,6 +1078,7 @@ Program Definition efor
   := es <- t;;
      _.
 Next Obligation.
+Set Printing All.
   refine open_constr:(fmap filterNone _);
     try typeclasses_eauto.
   refine open_constr:((fun a b => mapT b a) es (fun e => cs <- getEntity (toEnt e);; lift (unQueryT q e cs)));

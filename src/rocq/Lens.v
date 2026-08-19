@@ -1,7 +1,5 @@
-From Vellvm.Utils Require Import
-  Monads.
-
 Require Import ExtLib.Data.Monads.StateMonad.
+Require Import ExtLib.Data.Monads.IdentityMonad.
 Require Import ExtLib.Structures.Monads.
 Require Import ExtLib.Structures.Functor.
 Require Import ExtLib.Structures.Applicative.

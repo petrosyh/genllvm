@@ -6,11 +6,16 @@
 -arg -w -arg -deprecated-hint-rewrite-without-locality
 -arg -w -arg -require-in-module
 
-./rocq/GenAST.v
+./rocq/Lens.v
+./rocq/Default.v
+./rocq/ECS.v
+./rocq/GenMetadata.v
+./rocq/Utils.v
 ./rocq/Generators.v
+./rocq/GenAST.v
 ./rocq/GenLLVM.v
 ./rocq/QCVellvm.v
 ./rocq/TestCases.v
-./rocq/Utils.v
+
 
 
