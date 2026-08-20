@@ -13,7 +13,6 @@
 
 From Vellvm.Syntax Require Import
   CFG
-  TypeUtil
   TypToDtyp
   DynamicTypes.
 
@@ -22,14 +21,15 @@ From Vellvm.Semantics Require Import
 
 From Vellvm Require Import
   LLVMAst
-  Utilities
+  Utils
   AstLib
   DynamicTypes
-  DList
-  IntMaps
-  Utils.Default.
+  Utils.DList
+  IntMaps.
 
-From Vellvm.QC Require Import
+From GenLLVM Require Import
+  Default
+  TypeUtil
   Utils
   Generators
   ECS
@@ -78,6 +78,7 @@ Open Scope string.
     not used in proofs) it's not terribly important to prove that they
     actually terminate.  *)
 Unset Guard Checking.
+Unset Implicit Arguments.
 
 (* Controls whether or not we generate floats... The float generators
 often break with updates, so this may be convenient *)
@@ -94,7 +95,7 @@ Section Helpers.
   Fixpoint is_sized_type_h (t : typ) : bool
     := match t with
        | TYPE_I sz => true
-       | TYPE_IPTR => true
+       | TYPE_Iptr => true
        | TYPE_Pointer (Some t) => is_sized_type_h t
        | TYPE_Pointer None => true
        | TYPE_Void => false
@@ -966,7 +967,7 @@ Section TypGenerators.
             ret (TYPE_Identified id)
         end
     | TYPE_I sz => ret t
-    | TYPE_IPTR => ret t
+    | TYPE_Iptr => ret t
     | TYPE_Pointer (Some t') =>
         pt <- normalize_type_GenLLVM t';;
         ret (TYPE_Pointer (Some pt))
@@ -1714,9 +1715,9 @@ Section ExpGenerators.
          | TYPE_I sz' => if Pos.eq_dec sz sz' then true else false
          | _ => false
          end
-       | TYPE_IPTR =>
+       | TYPE_Iptr =>
          match b with
-         | TYPE_IPTR => true
+         | TYPE_Iptr => true
          | _ => false
          end
        | TYPE_Pointer t =>
@@ -1837,7 +1838,7 @@ Section ExpGenerators.
             end
         | _ => false
         end
-    | TYPE_IPTR
+    | TYPE_Iptr
     | TYPE_Pointer None
     | TYPE_FP _
     | TYPE_Label
@@ -2031,7 +2032,7 @@ Section ExpGenerators.
   Definition gen_non_zero_exp_size (sz : nat) (t : typ) : GenLLVM (exp typ) :=
     match t with
        | TYPE_I n => lift (gen_non_zero_exp (Some n))
-       | TYPE_IPTR => lift (gen_non_zero_exp None)
+       | TYPE_Iptr => lift (gen_non_zero_exp None)
        | TYPE_FP FP_float => lift gen_float32_exp (* TODO: is this actually non-zero...? *)
        | TYPE_FP FP_double => lift gen_double_exp (* TODO: is this actually non-zero...? *)
        | _ => failGen "gen_non_zero_exp_size"
@@ -2040,7 +2041,7 @@ Section ExpGenerators.
   Definition gen_gt_zero_exp_size (sz : nat) (t : typ) : GenLLVM (exp typ)
     := match t with
        | TYPE_I n => lift (gen_gt_zero_exp (Some n))
-       | TYPE_IPTR => lift (gen_gt_zero_exp None)
+       | TYPE_Iptr => lift (gen_gt_zero_exp None)
        | TYPE_FP FP_float => failGen "gen_gt_zero_exp_size float"
        | TYPE_FP FP_double => failGen "gen_gt_zero_exp_size double" (*ret EXP_Double <*> lift fing64*) (*TODO : Fix generator for double*)
        | _ => failGen "gen_gt_zero_exp_size"
@@ -2105,7 +2106,7 @@ Section ExpGenerators.
               ret (EXP_Integer (BinIntDef.Z.to_num_int z))
           (* lift (x <- (arbitrary : G nat);; ret (Z.of_nat x)) *)
           (*  (* TODO: should the integer be forced to be in bounds? *) *)
-          | TYPE_IPTR =>
+          | TYPE_Iptr =>
               z <- lift (arbitrary : G Z) ;;
               ret (EXP_Integer (BinIntDef.Z.to_num_int z))
           | TYPE_Pointer _       => failGen "gen_exp_size TYPE_Pointer"
@@ -2190,8 +2191,8 @@ Section ExpGenerators.
                   else [])%list
               else
                 [ gen_ibinop_exp gen_global_of_typ gen_ident_of_typ isz ]
-          | TYPE_IPTR =>
-              [gen_ibinop_exp_typ gen_global_of_typ gen_ident_of_typ TYPE_IPTR]
+          | TYPE_Iptr =>
+              [gen_ibinop_exp_typ gen_global_of_typ gen_ident_of_typ TYPE_Iptr]
           | TYPE_Pointer _         => [] (* GEP? *)
 
           (* TODO: currently only generate literals for aggregate structures with size 0 exps *)
@@ -2566,7 +2567,7 @@ Section InstrGenerators.
   Fixpoint get_bit_size_from_typ (t : typ) : N :=
     match t with
     | TYPE_I sz => Npos sz
-    | TYPE_IPTR => 64 (* TODO: probably kind of a lie... *)
+    | TYPE_Iptr => 64 (* TODO: probably kind of a lie... *)
     | TYPE_Pointer t => 64
     | TYPE_Void => 0
     | TYPE_FP FP_half => 16
@@ -2714,7 +2715,7 @@ Section InstrGenerators.
            d <- use (gen_context' .@ entl ptrEnt .@ deterministic');;
            (* TODO: for now consider all pointers nondeterministic *)
            (gen_context' .@ entl e .@ deterministic') .= false;;
-           ret (iid, INSTR_Op (OP_Conversion Inttoptr typ_from_cast (EXP_Ident id) new_tptr))
+           ret (iid, INSTR_Op (OP_Conversion (CONV_Impure Inttoptr) typ_from_cast (EXP_Ident id) new_tptr))
        end).
 
   (* TODO: handle opaque pointers. *)
@@ -2803,7 +2804,7 @@ Section InstrGenerators.
        efc <- gen_exp_sz0 tfc;;
        new_typ <- gen_bitcast_typ tfc;;
        id <- genInstrId new_typ;;
-       ret (id, INSTR_Op (OP_Conversion Bitcast tfc efc new_typ))).
+       ret (id, INSTR_Op (OP_Conversion CONV_Bitcast tfc efc new_typ))).
 
   Definition gen_call (tfun : typ) : GenLLVM (instr_id * instr typ) :=
     ctx <- use (gen_context' .@ @variable_type' (WorldOf _));;
@@ -2993,7 +2994,7 @@ Section InstrGenerators.
               defaults to deterministic *)
            (gen_context' .@ entl e .@ deterministic') .= false;;
            (gen_context' .@ entl e .@ from_pointer') .= ret ptr_ent;;
-           ret (id, INSTR_Op (OP_Conversion Ptrtoint tptr ptr_exp typ_from_cast))
+           ret (id, INSTR_Op (OP_Conversion (CONV_Impure Ptrtoint) tptr ptr_exp typ_from_cast))
        end).
 
   (* Generate basic instructions.
@@ -3253,7 +3254,7 @@ Section InstrGenerators.
     in
 
     bs <- gen_blocks ret_t;;
-    ret (mk_definition (block typ * list (block typ)) prototype (map ident_to_raw_id args) bs).
+    ret (mk_definition prototype (map ident_to_raw_id args) bs).
 
 
   Definition gen_definition (name : global_id) (ret_t : typ) (args : list typ) : GenLLVM (definition typ (block typ * list (block typ)))

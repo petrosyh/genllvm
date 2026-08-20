@@ -1,7 +1,7 @@
 (** Some utility functions and lemmas for QC. *)
 
 (* From QuickChick Require Import QuickChick. *)
-From QuickChick Require Import Generators Producer.
+From QuickChick Require Import Generators Producer Show.
 Open Scope qc_scope.
 Set Warnings "-extraction-opaque-accessed,-extraction".
 
@@ -10,7 +10,7 @@ From ExtLib.Structures Require Export
 
 Require Import ExtLib.Data.Monads.StateMonad.
 
-From Vellvm Require Import LLVMAst Util AstLib Syntax.CFG.
+From Vellvm Require Import LLVMAst AstLib Syntax.CFG Syntax.ShowAST.
 From Vellvm Require Import Semantics.DynamicValues.
 
 
@@ -23,6 +23,19 @@ Import ApplicativeNotation.
 From Stdlib Require Import Lia.
 
 Open Scope Z_scope.
+
+#[global] Instance Show_typ : Show typ :=
+  {| show := ShowAST.show_typ |}.
+
+(* From src/rocq/Utils/OptionUtil.v of commit f1ec3588 *)
+Definition maybe {a b} (def : b) (f : a -> b) (oa : option a) : b
+  := match oa with
+     | Some a => f a
+     | None => def
+     end.
+
+(* From src/rocq/Utils/Error.v of commit f1ec3588 *)
+Notation err := (sum String.string).
 
 Fixpoint max_nat_list (l : list nat) : nat :=
   match l with

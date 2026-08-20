@@ -12,6 +12,7 @@
 ./rocq/GenMetadata.v
 ./rocq/Utils.v
 ./rocq/Generators.v
+./rocq/TypeUtil.v
 ./rocq/GenAST.v
 ./rocq/GenLLVM.v
 ./rocq/QCVellvm.v

@@ -12,6 +12,7 @@ Import LensNotations.
 #[local] Open Scope monad_scope.
 #[local] Open Scope lens.
 
+Require Import ExtLib.Data.List.
 Require Import ExtLib.Data.Monads.StateMonad.
 Require Import ExtLib.Data.Monads.OptionMonad.
 Require Import ExtLib.Data.Monads.ReaderMonad.
@@ -26,6 +27,14 @@ Import MonadPlusNotation.
 Import ApplicativeNotation.
 Import FunctorNotation.
 Import ListNotations.
+
+(* From src/rocq/Utils/ListUtil.v of commit f1ec3588 *)
+Import Monoid.
+#[global] Instance Foldable_list {a} : Foldable (list a) a.
+split.
+intros m M conv l.
+apply (fold_left (fun acc x => monoid_plus M (conv x) acc) l (monoid_unit M)).
+Defined.
 
 Record Metadata s :=
   mkMetadata
