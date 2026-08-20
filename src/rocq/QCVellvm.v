@@ -10,7 +10,8 @@ From Vellvm Require Import
   Syntax.ShowAST
   Syntax.ReprAST.
 From GenLLVM Require Import
-  GenAST.
+  GenAST
+  QCExtractionFix.
 
 Import ListNotations.
 Local Open Scope string_scope.

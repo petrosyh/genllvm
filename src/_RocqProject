@@ -6,6 +6,7 @@
 -arg -w -arg -deprecated-hint-rewrite-without-locality
 -arg -w -arg -require-in-module
 
+./rocq/QCExtractionFix.v
 ./rocq/Lens.v
 ./rocq/Default.v
 ./rocq/ECS.v
@@ -15,8 +16,6 @@
 ./rocq/TypeUtil.v
 ./rocq/GenAST.v
 ./rocq/GenLLVM.v
-./rocq/QCVellvm.v
-./rocq/TestCases.v
 
 
 
