@@ -15,7 +15,7 @@ VELLVM_ROCQ_DIR = $(VELLVM_SRC_DIR)/rocq
 VELLVM_ML_DIR = $(VELLVM_SRC_DIR)/ml
 
 
-ROCQINCLUDES=$(ROCQDIR), -R $(ROCQDIR) GenLLVM -R $(EXTRACTDIR) Extract -R Vellvm $(VELLVM_ROCQ_DIR)
+ROCQINCLUDES=-R $(ROCQDIR) GenLLVM -R $(EXTRACTDIR) Extract -R $(VELLVM_ROCQ_DIR) Vellvm
 ROCQEXEC="$(ROCQBIN)rocq" top -q -w none $(ROCQINCLUDES) -batch -load-vernac-source
 ROCQMAKEFILE="$(ROCQBIN)rocq" makefile
 
@@ -38,7 +38,7 @@ RocqMakefile: _RocqProject
 all:
 	$(MAKE) vellvm
 	$(MAKE) rocq
-	$(MAKE) genllvm
+#	$(MAKE) genllvm
 
 .PHONY: rocq
 rocq: real-all
@@ -49,7 +49,18 @@ rocq: real-all
 vellvm:
 	make interp -C ../vellvm/src 
 
+######## QuickChick testing targets
 
+.PHONY: qc-tests
+qc-tests: rm-qc-test-vo vellvm qc-files
+	$(ROCQEXEC) rocq/QCVellvm.v
+
+.PHONY: qc-files
+qc-files: rocq
+
+.PHONY: rm-qc-test-vo
+rm-qc-test-vo:
+	rm -f rocq/QCVellvm.vo rocq/QCVellvm.vos rocq/QCVellvm.vok rocq/QCVellvm.glob rocq/.QCVellvm.aux
 
 .PHONY: extracted
 extracted: $(EXTRACTDIR)/STAMP

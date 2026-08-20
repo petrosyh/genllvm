@@ -25,7 +25,7 @@ From Stdlib Require Import Lia.
 Open Scope Z_scope.
 
 #[global] Instance Show_typ : Show typ :=
-  {| show := ShowAST.show_typ |}.
+  {| show := show_typ |}.
 
 (* From src/rocq/Utils/OptionUtil.v of commit f1ec3588 *)
 Definition maybe {a b} (def : b) (f : a -> b) (oa : option a) : b
