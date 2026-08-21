@@ -37,7 +37,8 @@ From GenLLVM Require Import
   GenMetadata.
 
 
-Require Import Integers.
+Require Import Integers Floats.
+From Flocq Require Import IEEE754.Bits.
 
 
 From ExtLib.Structures Require Export
@@ -2012,10 +2013,41 @@ Section ExpGenerators.
           ]
     end%nat.
 
+  Definition hex_digit_of_Z (z: Z) : Hexadecimal.uint -> Hexadecimal.uint :=
+    match Z.to_nat z with
+    | 0%nat => Hexadecimal.D0
+    | 1%nat => Hexadecimal.D1
+    | 2%nat => Hexadecimal.D2
+    | 3%nat => Hexadecimal.D3
+    | 4%nat => Hexadecimal.D4
+    | 5%nat => Hexadecimal.D5
+    | 6%nat => Hexadecimal.D6
+    | 7%nat => Hexadecimal.D7
+    | 8%nat => Hexadecimal.D8
+    | 9%nat => Hexadecimal.D9
+    | 10%nat => Hexadecimal.Da
+    | 11%nat => Hexadecimal.Db
+    | 12%nat => Hexadecimal.Dc
+    | 13%nat => Hexadecimal.Dd
+    | 14%nat => Hexadecimal.De
+    | _ => Hexadecimal.Df
+    end.
+
+  Fixpoint hex_of_Z_fuel (f: nat) (z: Z) (acc: Hexadecimal.uint) : Hexadecimal.uint :=
+    match f with
+    | O => acc
+    | S f' => hex_of_Z_fuel f' (z / 16) (hex_digit_of_Z (z mod 16) acc)
+    end.
+
+  Definition hex64_of_Z (z: Z) : Hexadecimal.uint :=
+    hex_of_Z_fuel 16 z Hexadecimal.Nil.
+
   (* SAZ: with the new representation of floating point syntax, these could probably be done with typeclasses *)
   Definition gen_float32_syntax : G float_syntax :=
     h <- gen_hex 8 ;;
-    ret (FS_hex FH_X h).
+    let z32 := BinInt.Z.of_hex_uint h in
+    let d32 := (hex64_of_Z (Bits.bits_of_b64 (Floats.Float32.to_double (Bits.b32_of_bits z32)))) in
+    ret (FS_hex FH_X d32).
 
   Definition gen_double_syntax : G float_syntax :=
     h <- gen_hex 16 ;;
