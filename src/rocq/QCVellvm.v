@@ -6,12 +6,22 @@ From Stdlib Require Import
   ZArith
   List.
 From Vellvm Require Import
+  Params
   LLVMAst
   Syntax.ShowAST
-  Syntax.ReprAST.
+  Syntax.ReprAST
+  Semantics.LLVMEvents
+  Semantics.InterpretationStack
+  Semantics.DynamicValues
+  ParamsV
+  IPtrInfinite.
 From GenLLVM Require Import
   GenAST
   QCExtractionFix.
+From ITree Require Import
+     ITree
+     Interp.Recursion
+     Events.Exception.
 
 Import ListNotations.
 Local Open Scope string_scope.
@@ -19,14 +29,14 @@ Local Open Scope string_scope.
 Extraction Blacklist String List Char Core Z Format int.
 
 (* Useful names *)
-Definition lprog := list (toplevel_entity typ (block typ * list (block typ))).
+Definition llprog := list (toplevel_entity typ (block typ * list (block typ))).
 
-#[global] Instance show_lprog : Show lprog :=
+#[global] Instance show_lprog : Show llprog :=
   {| show := showProg |}.
 
 (* Hide show instance... *)
 Inductive PROG :=
-| Prog : lprog -> PROG
+| Prog : llprog -> PROG
 .
 
 #[global] Instance Show_PROG : Show PROG :=
@@ -101,12 +111,12 @@ Definition vellvm_binary_command (prog : string) : Z
   := oint_to_Z (vellvm_binary_command_ocaml prog).
 
 (** Use the *llc_command* Axiom to run a Vellvm program with clang. *)
-Definition run_llc (prog : lprog) : Z
+Definition run_llc (prog : llprog) : Z
   := llc_command (to_caml_str (show prog)).
 
 (** Use the *vellvm_binary_command* Axiom to run a Vellvm program with
     the vellvm interpreter in the user's path. *)
-Definition run_vellvm_binary (prog : lprog) : Z
+Definition run_vellvm_binary (prog : llprog) : Z
   := vellvm_binary_command (to_caml_str (show prog)).
 
 (** This version runs the vellvm binary in your path instead...  This
@@ -118,24 +128,156 @@ Definition run_vellvm_binary (prog : lprog) : Z
     in the pretty printer for LLVM ASTs), and this can also be helpful
     for skirting around extraction bugs which are easier to patch up
     outside of QC. *)
-Definition vellvm_binary_agrees_with_clang (p : string + PROG) : Checker.
-  refine
-    (match p with
-     | inl msg => checker false
-     | inr p =>
-         (* collect (show prog) *)
-         let '(Prog prog) := p in
-         let clang_res := run_llc prog in
-         let vellvm_res := run_vellvm_binary prog in
-         if (Z.eqb clang_res vellvm_res)
-         then checker true
-         else whenFail ("Vellvm: " ++ show vellvm_res ++ " | Clang: " ++ show clang_res ++ " | Ast: " ++ ReprAST.repr prog) false
-     end).
+Definition vellvm_binary_agrees_with_clang (p : string + PROG) : Checker :=
+  match p with
+  | inl msg => checker false
+  | inr (Prog prog) =>
+    let clang_res := run_llc prog in
+    let vellvm_res := run_vellvm_binary prog in
+    if (Z.eqb clang_res vellvm_res)
+    then checker true
+    else whenFail ("Vellvm: " ++ show vellvm_res ++ " | Clang: " ++ show clang_res ++ " | Ast: " ++ ReprAST.repr prog) false
+  end.
+
+(* In-process testing *)
+
+#[local] Instance ParamsQC : Params := @ParamsV IPZ IPZTheory.
+
+Inductive MlResult (a e: Type) :=
+| MlOk : a -> MlResult a e
+| MlError : e -> MlResult a e.
+
+Extract Inductive MlResult => "result" [ "Ok" "Error" ].
+
+#[global] Instance MlResultShow {a e} `{Show a} `{Show e} : Show (MlResult a e).
+Proof.
+  split.
+  exact
+    (fun res =>
+       match res with
+       | MlOk a => ("Ok " ++ show a)%string
+       | MlError e => ("Error " ++ show e)%string
+       end).
 Defined.
+
+#[global] Instance showdv : Show dvalue.
+Proof.
+  split.
+  apply show_dvalue.
+Defined.
+
+Local Notation dvalue := DynamicValues.dvalue.
+Local Notation itr := (itree MCFGEbot (Res dvalue)).
+
+Unset Guard Checking.
+CoFixpoint step (t : itr) : MlResult dvalue string
+  := match observe t with
+     | RetF (_, x) => MlOk _ string x
+     | TauF t => step t
+     | VisF _ (inl1 e) k =>
+         MlError _ string "Uninterpreted external call"
+     | VisF _ (inr1 (inl1 (ThrowOOM msg))) k =>
+         MlError _ string ("OOM")%string
+     | VisF _ (inr1 (inr1 (inl1 (LLVMExc _)))) k =>
+         MlError _ string ("UB")%string
+     | VisF _ (inr1 (inr1 (inr1 (inl1 (ThrowUB _))))) k =>
+         MlError _ string ("UB")%string
+     | VisF _ (inr1 (inr1 (inr1 (inr1 (inl1 (Debug _)))))) k =>
+         MlError _ string ("Debug")%string
+     | VisF _ (inr1 (inr1 (inr1 (inr1 (inr1 (LLVMEvents.Throw _)))))) k =>
+         MlError _ string ("Failure")%string
+     end.
+Set Guard Checking.
+
+(** Top level interpreter to run LLVM programs. Yields either a uvalue, or an error string. *)
+Definition interpret (prog : llprog) : MlResult dvalue string
+  := step (TopLevel.interpreter nil prog).
+
+(** Basic property to make sure that Vellvm and Clang agree when they
+    both produce values *)
+Definition vellvm_agrees_with_clang (p : string + PROG) : Checker :=
+  match p with
+  | inl msg => checker false
+  | inr (Prog prog) =>
+    let clang_res := run_llc prog in
+    let vellvm_res := interpret prog in
+    match vellvm_res with
+    | MlOk (DVALUE_Base (DVALUE_I sz x)) =>
+      if ((Pos.eqb sz 8%positive && Z.eqb (Integers.unsigned x) clang_res)%bool)
+      then checker true
+      else whenFail ("Vellvm: " ++ show (Integers.unsigned x)
+                      ++ " | Clang: " ++ show clang_res
+                      ++ " | Ast: " ++ ReprAST.repr prog) false
+    | _ => whenFail ("Something else went wrong... Vellvm: " ++ show vellvm_res
+                      ++ " | Clang: " ++ show clang_res
+                      ++ " | Ast: " ++ ReprAST.repr prog) false
+    end
+  end.
+
+(** Processes *)
+Inductive process_status : Type :=
+| WEXITED   : oint -> process_status
+| WSIGNALED : oint -> process_status
+| WSTOPPED  : oint -> process_status
+.
+Extract Inductive process_status => "Unix.process_status" [ "Unix.WEXITED" "Unix.WSIGNALED" "Unix.WSTOPPED" ].
+
+#[global] Instance Show_process_status : Show process_status.
+Proof.
+  split.
+  intros STATUS. destruct STATUS as [EXIT | SIGNAL | STOPPED].
+  - exact ("Exited with " ++ show (oint_to_Z EXIT))%string.
+  - exact ("Signaled with " ++ show (oint_to_Z SIGNAL))%string.
+  - exact ("Stopped with " ++ show (oint_to_Z STOPPED))%string.
+Qed.
+
+Axiom fork : unit -> oint.
+Extract Inlined Constant fork => "Unix.fork".
+
+Axiom wait : unit -> (oint * process_status)%type.
+Extract Inlined Constant wait => "Unix.wait".
+
+Axiom wait_flag : Type.
+Extract Inlined Constant wait_flag => "Unix.wait_flag".
+
+Axiom waitpid : list wait_flag -> oint -> (oint * process_status)%type.
+Extract Inlined Constant waitpid => "Unix.waitpid".
+
+Axiom exit : forall {A}, oint -> A.
+Extract Inlined Constant exit => "exit".
+
+(** Basic property to make sure that Vellvm and Clang agree when they
+    both produce values *)
+Definition vellvm_agrees_with_clang_parallel (p : string + PROG) : Checker :=
+  match p with
+  | inl msg => checker false
+  | inr (Prog prog) =>
+    let pid := fork tt in
+    if oeq pid ozero
+    then (* Child *)
+      exit (llc_command_ocaml (to_caml_str (show prog)))
+    else (* Parent *)
+      let vellvm_res := interpret prog in
+      let clang_res := snd (waitpid nil pid) in
+      match vellvm_res, clang_res with
+      | MlOk (DVALUE_Base (DVALUE_I sz x)), (WEXITED ocaml_y) =>
+          let y := Integers.repr (oint_to_Z ocaml_y) in
+          if Integers.eq x y
+          then checker true
+          else whenFail ("Vellvm: " ++ show (Integers.unsigned x) ++ " | Clang: " ++ show (Integers.unsigned y) ++ " | Ast: " ++ ReprAST.repr prog) false
+      | _, (WSIGNALED ocaml_y) =>
+          whenFail ("clang process signaled") false
+      | _, (WSTOPPED ocaml_y) =>
+          whenFail ("clang process stopped") false
+      | _, _ =>
+          whenFail ("Something else went wrong... Vellvm: " ++ show vellvm_res ++ " | Clang: " ++ show clang_res) false
+      end
+  end.
 
 (* Definition agrees := (forAll (run_GenLLVM gen_llvm) vellvm_agrees_with_clang). *)
 
 Extract Constant defNumTests    => "1000".
 
 QuickChick (forAll (run_GenLLVM gen_PROG) vellvm_binary_agrees_with_clang).
-(*! QuickChick agrees. *)
+(* QuickChick (forAll (run_GenLLVM gen_PROG) vellvm_agrees_with_clang). *)
+(* QuickChick (forAll (run_GenLLVM gen_PROG) vellvm_agrees_with_clang_parallel). *)

@@ -102,7 +102,7 @@ Section Helpers.
        | TYPE_Void => false
        | TYPE_FP _ => true
        | TYPE_Label => true
-       | TYPE_Token => true                          
+       | TYPE_Token => true
        | TYPE_Metadata => true (* Not sure if this is right *)
        | TYPE_X86_mmx => true
        | TYPE_Array sz t => is_sized_type_h t
@@ -1708,7 +1708,7 @@ Section ExpGenerators.
            identified types... It should be conservative and say that
            the types are *not* equal always, though.
    *)
-  
+
   Fixpoint normalized_typ_eq (a : typ) (b : typ) {struct a} : bool
     := match a with
        | TYPE_I sz =>
@@ -1910,7 +1910,7 @@ Section ExpGenerators.
   (* Can't use choose for these functions because it gets extracted to
      ocaml's Random.State.int function which has small bounds. *)
 
-  
+
   Definition gen_int (sz : N) : G Z :=
     let i_sz := Z.of_N sz in
     if (i_sz <=? 8)%Z then (choose (0, 2 ^ i_sz - 1)) else ret 10000.
@@ -1986,7 +1986,7 @@ Section ExpGenerators.
   Definition gen_gt_zero_exp (bitwidth : option positive) : G (exp typ) :=
     i_val <- gen_gt_zero bitwidth;;
     (ret (EXP_Integer (BinIntDef.Z.to_num_int i_val))).
-    
+
   (* Generates a random string of hex digits of length len *)
   Fixpoint gen_hex (len : nat) : G Hexadecimal.uint :=
     match len with
@@ -1995,21 +1995,21 @@ Section ExpGenerators.
         r <- gen_hex n ;;
         oneof
            (ret (Hexadecimal.D0 r)) [
-            ret (Hexadecimal.D1 r) 
+            ret (Hexadecimal.D1 r)
           ; ret (Hexadecimal.D2 r)
-          ; ret (Hexadecimal.D3 r)                   
+          ; ret (Hexadecimal.D3 r)
           ; ret (Hexadecimal.D4 r)
-          ; ret (Hexadecimal.D5 r)                   
+          ; ret (Hexadecimal.D5 r)
           ; ret (Hexadecimal.D6 r)
-          ; ret (Hexadecimal.D7 r)                   
+          ; ret (Hexadecimal.D7 r)
           ; ret (Hexadecimal.D8 r)
-          ; ret (Hexadecimal.D9 r)                   
+          ; ret (Hexadecimal.D9 r)
           ; ret (Hexadecimal.Da r)
-          ; ret (Hexadecimal.Db r)                   
+          ; ret (Hexadecimal.Db r)
           ; ret (Hexadecimal.Dc r)
-          ; ret (Hexadecimal.Dd r)                   
+          ; ret (Hexadecimal.Dd r)
           ; ret (Hexadecimal.De r)
-          ; ret (Hexadecimal.Df r)                   
+          ; ret (Hexadecimal.Df r)
           ]
     end%nat.
 
@@ -2042,7 +2042,6 @@ Section ExpGenerators.
   Definition hex64_of_Z (z: Z) : Hexadecimal.uint :=
     hex_of_Z_fuel 16 z Hexadecimal.Nil.
 
-  (* SAZ: with the new representation of floating point syntax, these could probably be done with typeclasses *)
   Definition gen_float32_syntax : G float_syntax :=
     h <- gen_hex 8 ;;
     let z32 := BinInt.Z.of_hex_uint h in
@@ -2052,14 +2051,14 @@ Section ExpGenerators.
   Definition gen_double_syntax : G float_syntax :=
     h <- gen_hex 16 ;;
     ret (FS_hex FH_X h).
-  
+
   Definition gen_float32_exp : G (exp typ) :=
     ret EXP_Float <*> gen_float32_syntax.
 
   Definition gen_double_exp : G (exp typ) :=
     ret EXP_Float <*> gen_double_syntax.
 
-  
+
   (* TODO: make this more complex using metadata *)
   Definition gen_non_zero_exp_size (sz : nat) (t : typ) : GenLLVM (exp typ) :=
     match t with
@@ -2173,8 +2172,8 @@ Section ExpGenerators.
                         else mzero));;
               gen_exp_size' gen_global_of_typ gen_ident_of_typ 0%nat t
           (* Not generating these types for now *)
-          | TYPE_FP FP_float          => lift gen_float32_exp 
-          | TYPE_FP FP_double         => lift gen_double_exp 
+          | TYPE_FP FP_float          => lift gen_float32_exp
+          | TYPE_FP FP_double         => lift gen_double_exp
           | TYPE_FP _                 => failGen "gen_exp_size TYPE_FP"
           | TYPE_Label                => failGen "gen_exp_size TYPE_Label"
           | TYPE_Token                => failGen "gen_exp_size TYPE_Token"
@@ -2240,7 +2239,7 @@ Section ExpGenerators.
           | TYPE_FP FP_double      => [gen_fbinop_exp gen_global_of_typ gen_ident_of_typ (TYPE_FP FP_double)]
           | TYPE_FP _              => [failGen "gen_exp_size TYPE_FP list"]
           | TYPE_Metadata          => [failGen "gen_exp_size TYPE_Metadata list"]
-          | TYPE_Label             => [failGen "gen_exp_size TYPE_Label list"]                                       
+          | TYPE_Label             => [failGen "gen_exp_size TYPE_Label list"]
           | TYPE_Token             => [failGen "gen_exp_size TYPE_Token list"]
           | TYPE_X86_mmx           => [failGen "gen_exp_size TYPE_X86_mmx list"]
           | TYPE_Identified id     =>
@@ -2604,7 +2603,7 @@ Section InstrGenerators.
     | TYPE_Void => 0
     | TYPE_FP FP_half => 16
     | TYPE_FP FP_bfloat => 16
-    | TYPE_FP FP_float => 32                           
+    | TYPE_FP FP_float => 32
     | TYPE_FP FP_double => 64
     | TYPE_FP FP_x86_fp80 => 80
     | TYPE_FP FP_fp128 => 128
