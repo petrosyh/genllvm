@@ -179,7 +179,7 @@ CoFixpoint step (t : itr) : MlResult dvalue string
      | VisF _ (inr1 (inl1 (ThrowOOM msg))) k =>
          MlError _ string ("OOM")%string
      | VisF _ (inr1 (inr1 (inl1 (LLVMExc _)))) k =>
-         MlError _ string ("UB")%string
+         MlError _ string ("LLVMException")%string
      | VisF _ (inr1 (inr1 (inr1 (inl1 (ThrowUB _))))) k =>
          MlError _ string ("UB")%string
      | VisF _ (inr1 (inr1 (inr1 (inr1 (inl1 (Debug _)))))) k =>
