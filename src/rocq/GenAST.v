@@ -1925,7 +1925,9 @@ Section ExpGenerators.
 
   Fixpoint gen_unsigned_bitwidth_h (acc : Z) (bitwidth : positive) {struct bitwidth} : G Z :=
     if Pos.eqb bitwidth 1
-    then gen_bitZ
+    then
+      bit <- gen_bitZ;;
+      ret (2 * acc + bit)%Z
     else
       bit <- gen_bitZ;;
       gen_unsigned_bitwidth_h (2 * acc + bit)%Z (bitwidth-1).
@@ -2304,7 +2306,7 @@ Section ExpGenerators.
   with
   gen_icmp_exp_typ (gen_global_of_typ : typ -> GenLLVM (option ident)) (gen_ident_of_typ : typ -> GenLLVM (option ident)) (t : typ) {struct t} : GenLLVM (exp typ)
   := cmp <- lift gen_icmp;;
-     ret (OP_ICmp false cmp) <*> ret t <*> gen_exp_size' gen_global_of_typ gen_ident_of_typ 0%nat t <*> gen_non_zero_exp_size 0%nat t
+     ret (OP_ICmp false cmp) <*> ret t <*> gen_exp_size' gen_global_of_typ gen_ident_of_typ 0%nat t <*> gen_exp_size' gen_global_of_typ gen_ident_of_typ 0%nat t
   with
   gen_fcmp_exp_typ (gen_global_of_typ : typ -> GenLLVM (option ident)) (gen_ident_of_typ : typ -> GenLLVM (option ident)) (t : typ) {struct t} : GenLLVM (exp typ)
   := cmp <- lift gen_fcmp;;
