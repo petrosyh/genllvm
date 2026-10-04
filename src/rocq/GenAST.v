@@ -2559,7 +2559,7 @@ Section InstrGenerators.
        paths_in_agg <- get_index_paths_insertvalue ntagg;;
        '(tsub, path_for_insertvalue) <- elems_LLVM paths_in_agg;;
        (* GC: THIS IS FALSE and will cause trouble because maybe the type we want is not in the context!!! NEED TO CHANGE TO SOMETHING ELSE*)
-       esub <- hide_ctx (gen_exp_sz0 tsub);;
+       esub <- gen_exp_sz0 tsub;;
        (* Generate all of the type*)
        id <- genInstrId tagg;;
        ret (id, INSTR_Op (OP_InsertValue (tagg, eagg) (tsub, esub) (List.map (BinIntDef.Z.to_num_int) path_for_insertvalue)))).
