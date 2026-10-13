@@ -2364,12 +2364,25 @@ Section ExpGenerators.
           e <- gen_exp t;;
           ret (t, e)).
 
+  Definition gen_select_exp (t : typ) : GenLLVM (exp typ)
+    := match t with
+       | TYPE_I _ =>
+           cond <- gen_exp_sz0 (TYPE_I 1);;
+           if_true <- gen_exp_sz0 t;;
+           if_false <- gen_exp_sz0 t;;
+           ret (OP_Select (TYPE_I 1, cond) (t, if_true) (t, if_false))
+       | _ => failGen "gen_select_exp: unsupported result type"
+       end.
+
   Definition gen_op (t : typ) : GenLLVM (exp typ)
     := sized_LLVM
          (fun sz =>
             match t with
             | TYPE_I isz =>
-                if Pos.eqb isz 1
+                draw <- lift_GenLLVM (choose (0%N, 31%N));;
+                if N.eqb draw 0%N
+                then gen_select_exp t
+                else if Pos.eqb isz 1
                 then
                   (* If I1 also allow ICmp and FCmp *)
                   oneOf_LLVM
