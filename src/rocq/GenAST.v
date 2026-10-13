@@ -2379,24 +2379,25 @@ Section ExpGenerators.
          (fun sz =>
             match t with
             | TYPE_I isz =>
-                draw <- lift_GenLLVM (choose (0%N, 31%N));;
-                if N.eqb draw 0%N
-                then gen_select_exp t
-                else if Pos.eqb isz 1
+                if Pos.eqb isz 1
                 then
                   (* If I1 also allow ICmp and FCmp *)
-                  oneOf_LLVM
-                    [ gen_ibinop_exp gen_deterministic_global_ident gen_deterministic_ident isz
-                      ; gen_icmp_exp gen_deterministic_global_ident gen_deterministic_ident
-                      ; gen_fcmp_exp gen_deterministic_global_ident gen_deterministic_ident
+                  freq_LLVM
+                    [ (24%nat, gen_select_exp t)
+                      ; (24%nat, gen_ibinop_exp gen_deterministic_global_ident gen_deterministic_ident isz)
+                      ; (24%nat, gen_icmp_exp gen_deterministic_global_ident gen_deterministic_ident)
+                      ; (24%nat, gen_fcmp_exp gen_deterministic_global_ident gen_deterministic_ident)
                     ]
                 else
-                  gen_ibinop_exp gen_deterministic_global_ident gen_deterministic_ident isz
+                  freq_LLVM
+                    [ (8%nat, gen_select_exp t)
+                      ; (24%nat, gen_ibinop_exp gen_deterministic_global_ident gen_deterministic_ident isz)
+                    ]
             | TYPE_FP FP_float | TYPE_FP FP_double =>
-                draw <- lift_GenLLVM (choose (0%N, 31%N));;
-                if N.eqb draw 0%N
-                then gen_select_exp t
-                else gen_fbinop_exp gen_deterministic_global_ident gen_deterministic_ident t
+                freq_LLVM
+                  [ (8%nat, gen_select_exp t)
+                    ; (24%nat, gen_fbinop_exp gen_deterministic_global_ident gen_deterministic_ident t)
+                  ]
             | _ => failGen "gen_op"
             end).
 
