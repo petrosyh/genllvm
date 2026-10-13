@@ -2310,7 +2310,7 @@ Section ExpGenerators.
   with
   gen_fcmp_exp_typ (gen_global_of_typ : typ -> GenLLVM (option ident)) (gen_ident_of_typ : typ -> GenLLVM (option ident)) (t : typ) {struct t} : GenLLVM (exp typ)
   := cmp <- lift gen_fcmp;;
-     ret (OP_FCmp cmp) <*> ret t <*> gen_exp_size' gen_global_of_typ gen_ident_of_typ 0%nat t <*> gen_non_zero_exp_size 0%nat t.
+     ret (OP_FCmp cmp) <*> ret t <*> gen_exp_size' gen_global_of_typ gen_ident_of_typ 0%nat t <*> gen_exp_size' gen_global_of_typ gen_ident_of_typ 0%nat t.
 
   Definition gen_icmp_exp (gen_global_of_typ : typ -> GenLLVM (option ident)) (gen_ident_of_typ : typ -> GenLLVM (option ident)) : GenLLVM (exp typ)
     := τ <- gen_int_typ;;
@@ -2366,7 +2366,7 @@ Section ExpGenerators.
 
   Definition gen_select_exp (t : typ) : GenLLVM (exp typ)
     := match t with
-       | TYPE_I _ =>
+       | TYPE_I _ | TYPE_FP FP_float | TYPE_FP FP_double =>
            cond <- gen_exp_sz0 (TYPE_I 1);;
            if_true <- gen_exp_sz0 t;;
            if_false <- gen_exp_sz0 t;;
@@ -2392,8 +2392,11 @@ Section ExpGenerators.
                     ]
                 else
                   gen_ibinop_exp gen_deterministic_global_ident gen_deterministic_ident isz
-            | TYPE_FP FP_float => gen_fbinop_exp gen_deterministic_global_ident gen_deterministic_ident (TYPE_FP FP_float)
-            | TYPE_FP FP_double => gen_fbinop_exp gen_deterministic_global_ident gen_deterministic_ident (TYPE_FP FP_double)
+            | TYPE_FP FP_float | TYPE_FP FP_double =>
+                draw <- lift_GenLLVM (choose (0%N, 31%N));;
+                if N.eqb draw 0%N
+                then gen_select_exp t
+                else gen_fbinop_exp gen_deterministic_global_ident gen_deterministic_ident t
             | _ => failGen "gen_op"
             end).
 
