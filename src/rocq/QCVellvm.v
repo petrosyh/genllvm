@@ -61,6 +61,8 @@ Extract Constant to_caml_str =>
   | c :: s -> Bytes.set r pos c; fill (pos + 1) s
   in Bytes.to_string (fill 0 s)".
 
+Definition discard_with (reason : string) : Checker := collect reason tt.
+
 (** Ocaml integers *)
 Axiom oint : Type. (* ocaml int type *)
 Extract Inlined Constant oint => "int".
@@ -208,6 +210,10 @@ Definition vellvm_agrees_with_clang (p : string + PROG) : Checker :=
       else whenFail ("Vellvm: " ++ show (Integers.unsigned x)
                       ++ " | Clang: " ++ show clang_res
                       ++ " | Ast: " ++ ReprAST.repr prog) false
+    | MlError e =>
+      if String.eqb e "UB"
+      then discard_with e
+      else whenFail ("Something else went wrong... ErrorType: " ++ e ++ " | Vellvm: " ++ show vellvm_res ++ " | Clang: " ++ show clang_res++ " | Ast: " ++ ReprAST.repr prog) false
     | _ => whenFail ("Something else went wrong... Vellvm: " ++ show vellvm_res
                       ++ " | Clang: " ++ show clang_res
                       ++ " | Ast: " ++ ReprAST.repr prog) false
@@ -261,16 +267,20 @@ Definition vellvm_agrees_with_clang_parallel (p : string + PROG) : Checker :=
       let clang_res := snd (waitpid nil pid) in
       match vellvm_res, clang_res with
       | MlOk (DVALUE_Base (DVALUE_I sz x)), (WEXITED ocaml_y) =>
-          let y := Integers.repr (oint_to_Z ocaml_y) in
-          if Integers.eq x y
-          then checker true
-          else whenFail ("Vellvm: " ++ show (Integers.unsigned x) ++ " | Clang: " ++ show (Integers.unsigned y) ++ " | Ast: " ++ ReprAST.repr prog) false
+        let y := Integers.repr (oint_to_Z ocaml_y) in
+        if Integers.eq x y
+        then checker true
+        else whenFail ("Vellvm: " ++ show (Integers.unsigned x) ++ " | Clang: " ++ show (Integers.unsigned y) ++ " | Ast: " ++ ReprAST.repr prog) false
+      | MlError e, (WEXITED _) =>
+        if String.eqb e "UB"
+        then discard_with e
+        else whenFail ("Something else went wrong... ErrorType: " ++ e ++ " | Vellvm: " ++ show vellvm_res ++ " | Clang: " ++ show clang_res++ " | Ast: " ++ ReprAST.repr prog) false
       | _, (WSIGNALED ocaml_y) =>
-          whenFail ("clang process signaled") false
+        whenFail ("clang process signaled") false
       | _, (WSTOPPED ocaml_y) =>
-          whenFail ("clang process stopped") false
+        whenFail ("clang process stopped") false
       | _, _ =>
-          whenFail ("Something else went wrong... Vellvm: " ++ show vellvm_res ++ " | Clang: " ++ show clang_res) false
+        whenFail ("Something else went wrong... Vellvm: " ++ show vellvm_res ++ " | Clang: " ++ show clang_res) false
       end
   end.
 
@@ -278,6 +288,6 @@ Definition vellvm_agrees_with_clang_parallel (p : string + PROG) : Checker :=
 
 Extract Constant defNumTests    => "1000".
 
-QuickChick (forAll (run_GenLLVM gen_PROG) vellvm_binary_agrees_with_clang).
-(* QuickChick (forAll (run_GenLLVM gen_PROG) vellvm_agrees_with_clang). *)
+(* QuickChick (forAll (run_GenLLVM gen_PROG) vellvm_binary_agrees_with_clang). *)
+QuickChick (forAll (run_GenLLVM gen_PROG) vellvm_agrees_with_clang).
 (* QuickChick (forAll (run_GenLLVM gen_PROG) vellvm_agrees_with_clang_parallel). *)
