@@ -3106,10 +3106,6 @@ Section InstrGenerators.
     | IVoid n => Name ("fail (instr_id_to_raw_id): " ++ fail_msg)
     end.
 
-  (* Returns a terminator and a list of new blocks that it reaches *)
-  (* Need to make returns more likely than branches so we don't get an
-     endless tree of blocks *)
-
   Definition gen_ret (τ : typ) : GenLLVM (terminator typ)
     := nt <- normalize_type_GenLLVM τ;;
        match nt with
@@ -3119,40 +3115,60 @@ Section InstrGenerators.
            ret (TERM_Ret (τ, e))
        end.
 
+  Definition max_switch_destinations : nat := 4.
+
+  (* The caller chooses n in 2..max_switch_destinations. *)
+  Definition gen_switch_tag (n : nat) : GenLLVM (code typ * exp typ)
+    := e <- gen_exp_sz0 (TYPE_I 8);;
+       id <- genLocal (TYPE_I 8);;
+       let tag := OP_IBinop URem (TYPE_I 8) e
+                    (EXP_Integer (Z.to_num_int (Z.of_nat n))) in
+       ret ([(IId (ident_to_raw_id id), INSTR_Op tag, [])], EXP_Ident id).
+
+  (* Returns extra code, a terminator, and a list of new blocks that it reaches.
+     Place the extra code after the current block's existing code and before
+     its terminator. *)
+  (* Need to make returns more likely than branches so we don't get an
+     endless tree of blocks *)
   Fixpoint gen_terminator_sz
     (sz : nat)
     (t : typ) (* Return type *)
     (back_blocks : list block_id) (* Blocks that I'm allowed to jump back to *)
-    {struct t} : GenLLVM (terminator typ * list (block typ))
+    {struct t} : GenLLVM (code typ * terminator typ * list (block typ))
     :=
     match sz with
     | 0%nat =>
         term <- gen_ret t;;
-        ret (term, [])
+        ret ([], term, [])
     | S sz' =>
         (* Need to lift oneOf to GenLLVM ...*)
         freq_LLVM_thunked
           ([ (6%nat, fun _ => gen_terminator_sz 0 t back_blocks)
                (* Simple jump *)
-             ; (min sz' 6%nat, fun _ => '(b, (bh, bs)) <- gen_blocks_sz sz' t back_blocks;; ret (TERM_Br_1 (blk_id b), (bh::bs)))
-                 (* Conditional branch, with no backloops *)
+             ; (min sz' 6%nat, fun _ => '(b, (bh, bs)) <- gen_blocks_sz sz' t back_blocks;; ret ([], TERM_Br_1 (blk_id b), (bh::bs)))
+               (* Share the existing conditional-branch choice with switch. *)
              ; (min sz' 6%nat,
                  fun _ =>
-                   c <- gen_exp_sz0 (TYPE_I 1);;
+                   oneOf_LLVM_thunked
+                     [ fun _ =>
+                         (* Conditional branch, with no backloops *)
+                         c <- gen_exp_sz0 (TYPE_I 1);;
 
-                   (* Generate first branch *)
-                   (* We backtrack contexts so blocks in second branch *)
-                   (* don't refer to variables from the first *)
-                   (* branch. *)
-                   '(b1, (bh1, bs1)) <- backtrack_variable_ctxs (gen_blocks_sz (sz / 2) t back_blocks);;
-                   '(b2, (bh2, bs2)) <- gen_blocks_sz (sz / 2) t back_blocks;;
+                         (* Generate first branch *)
+                         (* We backtrack contexts so blocks in second branch *)
+                         (* don't refer to variables from the first *)
+                         (* branch. *)
+                         '(b1, (bh1, bs1)) <- backtrack_variable_ctxs (gen_blocks_sz (sz / 2) t back_blocks);;
+                         '(b2, (bh2, bs2)) <- gen_blocks_sz (sz / 2) t back_blocks;;
 
-                   ret (TERM_Br (TYPE_I 1, c) (blk_id b1) (blk_id b2), ((bh1::bs1) ++ (bh2::bs2))%list))
+                         ret ([], TERM_Br (TYPE_I 1, c) (blk_id b1) (blk_id b2), ((bh1::bs1) ++ (bh2::bs2))%list)
+                     ; fun _ => gen_switch_sz sz t back_blocks
+                     ])
                  (* Sometimes generate a loop *)
              ; (min sz' 6%nat,
                  fun _ =>
                    '(t, (b, bs)) <- gen_loop_sz sz' t back_blocks 10;; (* TODO: Should I replace sz with sz' here*)
-                   ret (t, (b :: bs)))
+                   ret ([], t, (b :: bs)))
             ]
              ++
              (* Loop back sometimes *)
@@ -3161,10 +3177,39 @@ Section InstrGenerators.
                  [(min sz' 1%nat,
                     fun _ =>
                       bid <- lift_GenLLVM (elems_ b back_blocks);;
-                      ret (TERM_Br_1 bid, []))]
+                      ret ([], TERM_Br_1 bid, []))]
              | nil => []
              end)
     end
+  with gen_switch_sz
+         (sz : nat)
+         (t : typ)
+         (back_blocks : list block_id)
+         {struct t} : GenLLVM (code typ * terminator typ * list (block typ))
+       := (* n includes the default destination. *)
+          n <- lift_GenLLVM (choose (2%nat, max_switch_destinations));;
+          '(tag_code, tag) <- gen_switch_tag n;;
+          '(default_bid, cases, bs) <- gen_switch_cases_sz
+            (seq 0 (n - 1)) (sz / n) t back_blocks;;
+          ret (tag_code, TERM_Switch (TYPE_I 8, tag) default_bid cases, bs)
+  with gen_switch_cases_sz
+         (values : list nat)
+         (sz : nat)
+         (t : typ)
+         (back_blocks : list block_id)
+         {struct t} : GenLLVM (block_id * list (tint_literal * block_id) * list (block typ))
+       := match values with
+          | [] =>
+              (* Generate default last, as with the second conditional branch. *)
+              '(b, (bh, bs)) <- gen_blocks_sz sz t back_blocks;;
+              ret (blk_id b, [], bh :: bs)
+          | value :: rest =>
+              (* Each sibling starts with the context from before this path. *)
+              '(b, (bh, bs)) <- backtrack_variable_ctxs (gen_blocks_sz sz t back_blocks);;
+              '(default_bid, cases, rest_bs) <- gen_switch_cases_sz rest sz t back_blocks;;
+              let case := (TInt_Literal 8 (Z.to_num_int (Z.of_nat value)), blk_id b) in
+              ret (default_bid, case :: cases, ((bh :: bs) ++ rest_bs)%list)
+          end
   with gen_blocks_sz
          (sz : nat)
          (t : typ) (* Return type *)
@@ -3173,10 +3218,10 @@ Section InstrGenerators.
        := bid <- new_block_id;;
           (* annotate_debug ("----Genblock: " ++ show bid);; *)
           code <- gen_code;;
-          '(term, bs) <- gen_terminator_sz (sz - 1) t back_blocks;;
+          '(extra_code, term, bs) <- gen_terminator_sz (sz - 1) t back_blocks;;
           let b := {| blk_id   := bid
                    ;  blk_phis := []
-                   ;  blk_code := code
+                   ;  blk_code := (code ++ extra_code)%list
                    ;  blk_term := (IVoid 0%Z, term, [])
                    ;  blk_comments := None
                    |} in
@@ -3270,10 +3315,10 @@ Section InstrGenerators.
          {struct t} : GenLLVM (block typ * list (block typ))
        := (* This should basically be gen_blocks_sz, but the initial block contains loop control and phi nodes *)
          code <- gen_code;;
-         '(term, bs) <- gen_terminator_sz (sz - 1) t (bid_next::back_blocks);;
+         '(extra_code, term, bs) <- gen_terminator_sz (sz - 1) t (bid_next::back_blocks);;
          let b := {| blk_id   := bid_loop
                   ; blk_phis := [(phi_id, Phi (TYPE_I 32 (* TODO: big ints *)) [(bid_entry, entry_exp); (bid_next, next_exp)], [])]
-                  ; blk_code := code
+                  ; blk_code := (code ++ extra_code)%list
                   ; blk_term := (IVoid 0%Z, term, [])
                   ; blk_comments := None
                   |} in
