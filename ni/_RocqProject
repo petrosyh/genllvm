@@ -1,0 +1,12 @@
+-R rocq GenLLVMNI
+-R ../vellvm/src/rocq Vellvm
+-R ../src/rocq GenLLVM
+
+rocq/Semantics/Observation.v
+rocq/Semantics/MemoryObservation.v
+rocq/Semantics/MemoryExecution.v
+rocq/Semantics/Runner.v
+rocq/Semantics/Preservation.v
+rocq/Tests/MemoryFixtures.v
+rocq/Tests/RunnerChecks.v
+rocq/Tests/MemoryBenchmark.v
